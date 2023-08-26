@@ -7,7 +7,7 @@ import re
 import io
 
 
-def list_directory(self, path):
+def list_directory(path):
     """Helper to produce a directory listing (absent index.html).
 
     Return value is either a file object, or None (indicating an
@@ -18,16 +18,16 @@ def list_directory(self, path):
     try:
         list = os.listdir(path)
     except OSError:
-        self.send_error(
-            exceptions.InvalidPathError,
-            "No permission to list directory")
+        # self.send_error(
+        #    exceptions.InvalidPathError,
+        #    "No permission to list directory")
         return None
     list.sort(key=lambda a: a.lower())
     r = []
     try:
-        displaypath = urllib_unquote(self.path, errors='surrogatepass')
+        displaypath = urllib_unquote(path, errors='surrogatepass')
     except UnicodeDecodeError:
-        displaypath = urllib_unquote(self.path)
+        displaypath = urllib_unquote(path)
     displaypath = html.escape(displaypath, quote=False)
     enc = 'utf-8'  # sys.getfilesystemencoding()
     title = f'Directory listing for {displaypath}'
@@ -39,13 +39,13 @@ def list_directory(self, path):
     r.append(f'<body>\n<h1>{title}</h1>')
     r.append('<hr>\n<ul>')
     for name in list:
-        fullname = os.path.join(path, name)
+        fullname = ospath_join(path, name)
         displayname = linkname = name
         # Append / for directories or @ for symbolic links
-        if os.path.isdir(fullname):
+        if ospath_isdir(fullname):
             displayname = name + "/"
             linkname = name + "/"
-        if os.path.islink(fullname):
+        if ospath_islink(fullname):
             displayname = name + "@"
             # Note: a link to a directory displays with @ and links with /
         r.append('<li><a href="%s">%s</a></li>'
@@ -56,10 +56,10 @@ def list_directory(self, path):
     f = io.BytesIO()
     f.write(encoded)
     f.seek(0)
-    self.send_response(status.Status(200, 'OK'))
-    self.send_header("Content-type", "text/html; charset=%s" % enc)
-    self.send_header("Content-Length", str(len(encoded)))
-    self.end_headers()
+    # self.send_response(status.Status(200, 'OK'))
+    # self.send_header("Content-type", "text/html; charset=%s" % enc)
+    # self.send_header("Content-Length", str(len(encoded)))
+    # self.end_headers()
     return f
 
 # # #### URLLIB quote and unquote
@@ -145,8 +145,10 @@ def quote_from_bytes(bs, safe='/'):
     quoter = _byte_quoter_factory(safe)
     return ''.join([quoter(char) for char in bs])
 
+# @functools.lru_cache
 def _byte_quoter_factory(safe):
     return _Quoter(safe).__getitem__
+    # that getitem might have to do with the functools.lru_cache
 
 class _Quoter(dict):
     """A mapping from bytes numbers (in range(0,256)) to strings.
@@ -158,15 +160,28 @@ class _Quoter(dict):
     # of cached keys don't call Python code at all).
     def __init__(self, safe):
         """safe: bytes object."""
+        super().__init__()
         self.safe = _ALWAYS_SAFE.union(safe)
+        self.inter = dict()
+        self.inter[0] = chr(0) if 0 in self.safe else '%{:02X}'.format(0)
 
     def __repr__(self):
-        return f"<Quoter {dict(self)!r}>"
+        return f"<Quoter {dict(self.inter)}>"
 
-    def __missing__(self, b):
-        # Handle a cache miss. Store quoted string in cache and return.
-        res = chr(b) if b in self.safe else '%{:02X}'.format(b)
-        self[b] = res
+    # circuitpython doesnt use dunder_missing, override getitem to use get(x,default)
+    # def __missing__(self, b):
+    def __getitem__(self, b):
+        try:
+            # BEWARE circuitpython has a weird behaviour where if you override a
+            #  function and inside call super().__getitem__ and the super() class
+            #  calls self, it ends up executing the overriding function rather
+            #  than the overridden one
+            res = self.inter[b]
+        except KeyError as exc:
+            print(exc)
+            # Handle a cache miss. Store quoted string in cache and return.
+            res = chr(b) if b in self.safe else '%{:02X}'.format(b)
+            self.inter[b] = res
         return res
 
 
@@ -203,7 +218,9 @@ def unquote_to_bytes(string):
             append(item)
     return b''.join(res)
 
-_asciire = re.compile('([\x00-\x7f]+)')
+# _asciire = re.compile('([\x00-\x7f]+)')
+# for some reason Cicruitpython re doesnt let me escape into hex like this
+_asciire = re.compile('([\t-~]+)')  # this is equiv to '([\x0b-\x7e]+)'
 
 def urllib_unquote(string, encoding='utf-8', errors='replace'):
     """Replace %xx escapes by their single-character equivalent. The optional
@@ -231,3 +248,25 @@ def urllib_unquote(string, encoding='utf-8', errors='replace'):
         append(unquote_to_bytes(bits[i]).decode(encoding, errors))
         append(bits[i + 1])
     return ''.join(res)
+
+
+# ########## Need to Fake some os.path functionality
+
+def ospath_join(patha, pathb):
+    # os.path.join has some odd behaviour
+    if patha[-1] in (os.sep, '\\', '/'):
+        return patha+pathb
+    else:
+        return patha+os.sep+pathb
+
+def ospath_isdir(path):
+    return os.stat(path)[0] == 0x4000
+
+def ospath_isfile(path):
+    return os.stat(path)[0] == 0x8000
+
+def ospath_islink(path):
+    # the microsd card im using doesnt support symlinks anyway,
+    # so noway to test what the magic number should be
+    return False
+
