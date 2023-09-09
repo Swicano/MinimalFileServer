@@ -178,7 +178,6 @@ class _Quoter(dict):
             #  than the overridden one
             res = self.inter[b]
         except KeyError as exc:
-            print(exc)
             # Handle a cache miss. Store quoted string in cache and return.
             res = chr(b) if b in self.safe else '%{:02X}'.format(b)
             self.inter[b] = res
