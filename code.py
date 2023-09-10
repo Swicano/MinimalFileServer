@@ -5,20 +5,23 @@
 import socketpool
 import wifi
 import os
+import time
 
-from adafruit_httpserver import (
-    Server,
-    REQUEST_HANDLED_RESPONSE_SENT,
-    Request,
-    FileResponse, ChunkedResponse,
-    MIMETypes
-)
+#from adafruit_httpserver import (
+#    Server,
+#    REQUEST_HANDLED_RESPONSE_SENT,
+#    Request,
+#    FileResponse, ChunkedResponse,
+#    MIMETypes
+#)
+
+import adafruit_httpserver as ahs
 
 
 import microsd
 import minfileserv as mf
 
-MIMETypes.configure(
+ahs.MIMETypes.configure(
     default_to="text/plain",
     # Unregistering unnecessary MIME types can save memory
     keep_for=[".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico"],
@@ -27,6 +30,7 @@ MIMETypes.configure(
 )
 
 sd_root = microsd.create()
+display_root = "/sdd"
 
 ssid = os.getenv("WIFI_SSID")
 password = os.getenv("WIFI_PASSWORD")
@@ -37,28 +41,41 @@ wifi.radio.connect(ssid, password)
 print("Connected to", ssid)
 
 pool = socketpool.SocketPool(wifi.radio)
-server = Server(pool, "/static", debug=True)
+server = ahs.Server(pool, "/static", debug=True)
 
 
 @server.route("/")
-def base(request: Request):
+def base(request: ahs.Request):
     """
     Serve the default index.html file.
     """
-    return FileResponse(request, "index.html")
+    return ahs.FileResponse(request, "index.html")
 
-@server.route("/sd")
-def usd_root(request: Request):
+@server.route(f"{display_root}....",[ahs.GET],append_slash=False)
+@server.route(f"{display_root}",[ahs.GET],append_slash=False)
+def usd_root(request: ahs.Request):
     """
     serve the microsd directory
     """
-    fIOres = mf.list_directory(sd_root)
 
-    def bob():
-        for gg in fIOres:
-            yield gg.decode('utf-8')
+    #fIOres = mf.list_directory(sd_root)
+    print(request)
+    print(f"headers: {request.headers}")
+    print(f"httpvers: {request.http_version}")
+    print(f"json: {request.json()}")
+    print(f"method: {request.method}")
+    print(f"path: {request.path}")
+    print(f"queryParam: {request.query_params}")
+    #print(f"raw: {request.raw_request}")
 
-    return ChunkedResponse(request, bob, content_type=".html")
+
+    #def bob():
+    #    for gg in fIOres:
+    #        yield gg.decode('utf-8')
+
+    #return ahs.ChunkedResponse(request, bob, content_type=".html")
+    return mf.fileServer(sd_root, display_root, request)
+
 
 # Start the server.
 server.start(str(wifi.radio.ipv4_address))
@@ -69,10 +86,11 @@ while True:
         # for example read a sensor and capture an average,
         # or a running total of the last 10 samples
 
+        time.sleep(0.01)
         # Process any waiting requests
         pool_result = server.poll()
 
-        if pool_result == REQUEST_HANDLED_RESPONSE_SENT:
+        if pool_result == ahs.REQUEST_HANDLED_RESPONSE_SENT:
             # Do something only after handling a request
             pass
 

@@ -1,13 +1,49 @@
 # Write your code here :-)
 
 import os
-from adafruit_httpserver import status, exceptions
+#from adafruit_httpserver import status, exceptions
+import adafruit_httpserver as ahs
 import html
 import re
 import io
 
+def fileServer(true_root, display_root, request):
+    inpath = request.path
+    print(true_root)
+    print(display_root)
+    print(inpath)
+    if inpath.endswith("/"):
+        inpath = inpath[:-1]
 
-def list_directory(path):
+    if inpath.startswith(display_root):
+        working_path = inpath.replace(display_root, true_root, 1)
+    elif inpath.startswith(true_root):
+        working_path = inpath
+    else:
+        #what if the path doesnt start with the display root, NOR the trueroot?
+        working_path = inpath
+
+    print(working_path)
+
+    if ospath_isfile(working_path):
+        parts = working_path.split(os.sep)
+        file_name = parts[-1]
+        file_folder = os.sep.join(parts[:-1])
+        print(working_path)
+        print(file_name)
+        print(file_folder)
+        return ahs.FileResponse(request, filename=file_name, root_path=file_folder)
+
+    elif ospath_isdir(working_path):
+        fIOres = list_directory(working_path, inpath)
+        def bob():
+            for gg in fIOres:
+                yield gg.decode('utf-8')
+
+        return ahs.ChunkedResponse(request, bob, content_type=".html")
+
+
+def list_directory(path, disp_path=None):
     """Helper to produce a directory listing (absent index.html).
 
     Return value is either a file object, or None (indicating an
@@ -15,19 +51,22 @@ def list_directory(path):
     interface the same as for send_head().
 
     """
+    if disp_path is None:
+        disp_path = path
+
     try:
-        list = os.listdir(path)
+        flist = os.listdir(path)
     except OSError:
         # self.send_error(
         #    exceptions.InvalidPathError,
         #    "No permission to list directory")
         return None
-    list.sort(key=lambda a: a.lower())
+    flist.sort(key=lambda a: a.lower())
     r = []
     try:
-        displaypath = urllib_unquote(path, errors='surrogatepass')
+        displaypath = urllib_unquote(disp_path, errors='surrogatepass')
     except UnicodeDecodeError:
-        displaypath = urllib_unquote(path)
+        displaypath = urllib_unquote(disp_path)
     displaypath = html.escape(displaypath, quote=False)
     enc = 'utf-8'  # sys.getfilesystemencoding()
     title = f'Directory listing for {displaypath}'
@@ -38,16 +77,18 @@ def list_directory(path):
     r.append(f'<title>{title}</title>\n</head>')
     r.append(f'<body>\n<h1>{title}</h1>')
     r.append('<hr>\n<ul>')
-    for name in list:
+    for name in flist:
         fullname = ospath_join(path, name)
         displayname = linkname = name
         # Append / for directories or @ for symbolic links
         if ospath_isdir(fullname):
             displayname = name + "/"
-            linkname = name + "/"
+            linkname = ospath_join(displaypath, name) + "/"
         if ospath_islink(fullname):
             displayname = name + "@"
             # Note: a link to a directory displays with @ and links with /
+        if ospath_isfile(fullname):
+            linkname = ospath_join(displaypath, name)
         r.append('<li><a href="%s">%s</a></li>'
                  % (urllib_quote(linkname, errors='surrogatepass'),
                     html.escape(displayname, quote=False)))
