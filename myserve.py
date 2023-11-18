@@ -6,14 +6,8 @@ import socketpool
 import wifi
 import os
 import time
+import asyncio as aio
 
-#from adafruit_httpserver import (
-#    Server,
-#    REQUEST_HANDLED_RESPONSE_SENT,
-#    Request,
-#    FileResponse, ChunkedResponse,
-#    MIMETypes
-#)
 
 import adafruit_httpserver as ahs
 
@@ -76,25 +70,49 @@ def usd_root(request: ahs.Request):
     #return ahs.ChunkedResponse(request, bob, content_type=".html")
     return mf.fileServer(sd_root, display_root, request)
 
+async def run_polling(server, poll_time):
+    # Start the server.
+    server.start(str(wifi.radio.ipv4_address))
 
-# Start the server.
-server.start(str(wifi.radio.ipv4_address))
+    while True:
+        try:
+            # Do something useful in this section,
+            # for example read a sensor and capture an average,
+            # or a running total of the last 10 samples
 
-while True:
-    try:
-        # Do something useful in this section,
-        # for example read a sensor and capture an average,
-        # or a running total of the last 10 samples
+            await aio.sleep(poll_time)
+            # Process any waiting requests
+            pool_result = server.poll()
 
-        time.sleep(0.01)
-        # Process any waiting requests
-        pool_result = server.poll()
+            if pool_result == ahs.REQUEST_HANDLED_RESPONSE_SENT:
+                # Do something only after handling a request
+                pass
 
-        if pool_result == ahs.REQUEST_HANDLED_RESPONSE_SENT:
-            # Do something only after handling a request
-            pass
+            # You can stop the server by calling server.stop() anywhere in your code
+        except OSError as error:
+            print(error)
+            continue
 
-        # You can stop the server by calling server.stop() anywhere in your code
-    except OSError as error:
-        print(error)
-        continue
+
+def run_blocking(server):
+    # Start the server.
+    server.start(str(wifi.radio.ipv4_address))
+
+    while True:
+        try:
+            # Do something useful in this section,
+            # for example read a sensor and capture an average,
+            # or a running total of the last 10 samples
+
+            time.sleep(0.01)
+            # Process any waiting requests
+            pool_result = server.poll()
+
+            if pool_result == ahs.REQUEST_HANDLED_RESPONSE_SENT:
+                # Do something only after handling a request
+                pass
+
+            # You can stop the server by calling server.stop() anywhere in your code
+        except OSError as error:
+            print(error)
+            continue
