@@ -15,60 +15,64 @@ import adafruit_httpserver as ahs
 import microsd
 import minfileserv as mf
 
-ahs.MIMETypes.configure(
-    default_to="text/plain",
-    # Unregistering unnecessary MIME types can save memory
-    keep_for=[".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico"],
-    # If you need to, you can add additional MIME types
-    register={".foo": "text/foo", ".bar": "text/bar"},
-)
+def connect_build_srv():
+    ahs.MIMETypes.configure(
+        default_to="text/plain",
+        # Unregistering unnecessary MIME types can save memory
+        keep_for=[".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico"],
+        # If you need to, you can add additional MIME types
+        register={".foo": "text/foo", ".bar": "text/bar"},
+    )
 
-sd_root = microsd.create()
-display_root = "/sdd"
+    sd_root = microsd.create()
+    display_root = "/sdd"
 
-ssid = os.getenv("WIFI_SSID")
-password = os.getenv("WIFI_PASSWORD")
-
-
-print("Connecting to", ssid)
-wifi.radio.connect(ssid, password)
-print("Connected to", ssid)
-
-pool = socketpool.SocketPool(wifi.radio)
-server = ahs.Server(pool, "/static", debug=True)
+    ssid = os.getenv("WIFI_SSID")
+    password = os.getenv("WIFI_PASSWORD")
 
 
-@server.route("/")
-def base(request: ahs.Request):
-    """
-    Serve the default index.html file.
-    """
-    return ahs.FileResponse(request, "index.html")
+    print("Connecting to", ssid)
+    wifi.radio.connect(ssid, password)
+    print("Connected to", ssid)
 
-@server.route(f"{display_root}....",[ahs.GET],append_slash=False)
-@server.route(f"{display_root}",[ahs.GET],append_slash=False)
-def usd_root(request: ahs.Request):
-    """
-    serve the microsd directory
-    """
-
-    #fIOres = mf.list_directory(sd_root)
-    print(request)
-    print(f"headers: {request.headers}")
-    print(f"httpvers: {request.http_version}")
-    print(f"json: {request.json()}")
-    print(f"method: {request.method}")
-    print(f"path: {request.path}")
-    print(f"queryParam: {request.query_params}")
-    #print(f"raw: {request.raw_request}")
+    pool = socketpool.SocketPool(wifi.radio)
+    server = ahs.Server(pool, "/static", debug=True)
 
 
-    #def bob():
-    #    for gg in fIOres:
-    #        yield gg.decode('utf-8')
+    @server.route("/")
+    def base(request: ahs.Request):
+        """
+        Serve the default index.html file.
+        """
+        return ahs.FileResponse(request, "index.html")
 
-    #return ahs.ChunkedResponse(request, bob, content_type=".html")
-    return mf.fileServer(sd_root, display_root, request)
+    @server.route(f"{display_root}....",[ahs.GET],append_slash=False)
+    @server.route(f"{display_root}",[ahs.GET],append_slash=False)
+    def usd_root(request: ahs.Request):
+        """
+        serve the microsd directory
+        """
+
+        #fIOres = mf.list_directory(sd_root)
+        print(request)
+        print(f"headers: {request.headers}")
+        print(f"httpvers: {request.http_version}")
+        print(f"json: {request.json()}")
+        print(f"method: {request.method}")
+        print(f"path: {request.path}")
+        print(f"queryParam: {request.query_params}")
+        #print(f"raw: {request.raw_request}")
+
+
+        #def bob():
+        #    for gg in fIOres:
+        #        yield gg.decode('utf-8')
+
+        #return ahs.ChunkedResponse(request, bob, content_type=".html")
+        return mf.fileServer(sd_root, display_root, request)
+
+
+    return server
 
 async def run_polling(server, poll_time):
     # Start the server.
