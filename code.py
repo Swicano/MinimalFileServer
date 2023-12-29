@@ -2,6 +2,7 @@
 import asyncio as aio
 import myserve
 import microcontroller
+import loadcellscale as lcs
 
 async def printsmth(poll_time_s):
     while True:
@@ -21,12 +22,22 @@ async def writesmth_tofile(poll_time_s):
             #led.value = False # turn off LED to indicate we're done
             # file is saved
 
+async def read_scale(poll_time_s):
+    loadcell = lcs.LoadCell()
+    loadcell.set_calibration()
+    while True:
+        # open file for append
+        await aio.sleep(poll_time_s)
+        print(f'current weight is {loadcell.read_calibrated_value()}')
+
+
 
 async def main():
     srv = myserve.connect_build_srv()
     serve_task = aio.create_task(myserve.run_polling(srv,10.0))
     prnt_task = aio.create_task(printsmth(10))
     prnt_task = aio.create_task(writesmth_tofile(20))
+    prnt_task = aio.create_task(read_scale(20))
 
     await aio.gather(serve_task,prnt_task)
 
